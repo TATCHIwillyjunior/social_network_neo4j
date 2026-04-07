@@ -48,23 +48,29 @@ class Database:
     
     # User operations
     def create_user(self, username: str, name: str) -> int:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO users (username, name) VALUES (?, ?)', (username, name))
-            return cursor.lastrowid
+        query = """
+            CREATE (u:User {id: randomUUID(), username: $username, name: $name})
+            RETURN u.id AS user_id
+            """
+        result = self.run(query, {"username": username, "name": name})
+        return result.single()["id"]
     
     def get_user(self, user_id: int) -> Optional[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, name FROM users WHERE id = ?', (user_id,))
-            row = cursor.fetchone()
-            return {'id': row[0], 'username': row[1], 'name': row[2]} if row else None
-    
+        query = """
+            MATCH (u:User {id: $user_id})
+            RETURN u.id AS user_id, u.username AS username, u.name AS name
+            """
+        result = self.run(query, {"user_id": user_id}).single()
+        return dict(result) if result else None
+
     def get_all_users(self) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, name FROM users')
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
+        query = """
+            MATCH (u:User)
+            RETURN u.id AS user_id, u.username AS username, u.name AS name
+            ORDER BY u.username
+            """
+        result = self.run(query)
+        return [dict(record) for record in result]
     
     # Post operations
     def create_post(self, user_id: int, content: str) -> int:
